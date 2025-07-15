@@ -1,0 +1,7 @@
+/dist/
+/build/
+/*.wasm
+*.js.map
+*.html.map
+*.o
+*.exe
