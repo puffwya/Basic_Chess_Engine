@@ -1,23 +1,156 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Chess Engine</title></head>
-<body>
-  <button id="initBtn">Initialize Board</button>
-  <button id="printBtn">Print Board</button>
+<head>
+  <meta charset="UTF-8">
+  <title>Chess Engine UI</title>
+  <style>
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 60px);
+      grid-template-rows: repeat(8, 60px);
+      width: 480px;
+      height: 480px;
+      border: 2px solid #333;
+      margin-top: 20px;
+    }
 
-  <script src="index.js"></script>
-  <script>
-    // Wait for Emscripten runtime to initialize before using Module
-    Module.onRuntimeInitialized = () => {
-      // Now Module is ready; attach button event handlers
-      document.getElementById('initBtn').onclick = () => {
-        Module.ccall('initBoard');
-      };
-      document.getElementById('printBtn').onclick = () => {
-        Module.ccall('printBoard');
-      };
-    };
-  </script>
+    .square {
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-family: sans-serif;
+    }
+
+    .light {
+      background-color: #f0d9b5;
+    }
+
+    .dark {
+      background-color: #b58863;
+    }
+    .square img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<h2>Chess Board</h2>
+<div id="board"></div>
+
+<script src="index.js"></script>
+
+<script>
+  // Map simple codes (from C++) to images
+  const symbols = {
+    1: '<img src="pieces/wp.png" alt="P">',
+    2: '<img src="pieces/bp.png" alt="P">',
+    3: '<img src="pieces/wn.png" alt="N">',
+    4: '<img src="pieces/bn.png" alt="N">',
+    5: '<img src="pieces/wb.png" alt="B">',
+    6: '<img src="pieces/bb.png" alt="B">',
+    7: '<img src="pieces/wr.png" alt="R">',
+    8: '<img src="pieces/br.png" alt="R">',
+    9: '<img src="pieces/wq.png" alt="Q">',
+    10: '<img src="pieces/bq.png" alt="Q">',
+    11: '<img src="pieces/wk.png" alt="K">',
+    12: '<img src="pieces/bk.png" alt="K">'
+  };
+  let selected = null;
+
+  function renderBoard() {
+    const boardEl = document.getElementById('board');
+    boardEl.innerHTML = '';
+
+    for (let rank = 0; rank < 8; rank++) {
+      for (let file = 0; file < 8; file++) {
+        const square = document.createElement('div');
+        square.className = 'square';
+        square.dataset.rank = rank;
+        square.dataset.file = file;
+
+        const isDark = (rank + file) % 2 === 1;
+        square.style.backgroundColor = isDark ? '#769656' : '#eeeed2';
+
+        boardEl.appendChild(square);
+      }
+    }
+  }
+
+  function renderPieces() {
+    const boardPtr = Module.ccall('getBoard', 'number');
+    const boardArray = new Uint8Array(Module.HEAPU8.buffer, boardPtr, 64);
+
+    for (let rank = 0; rank < 8; rank++) {
+      for (let file = 0; file < 8; file++) {
+        const index = (7 - rank) * 8 + file;  // Flip rank so white is on bottom
+        const piece = boardArray[index];
+
+        const square = document.querySelector(
+          `.square[data-rank="${rank}"][data-file="${file}"]`
+        );
+
+        square.innerHTML = symbols[piece] || '';
+      }
+    }
+  }
+
+  function setupClickHandlers() {
+    document.getElementById('board').addEventListener('click', (e) => {
+      if (!e.target.classList.contains('square')) return;
+
+      const file = parseInt(e.target.dataset.file);
+      const rank = parseInt(e.target.dataset.rank);
+      const index = (7 - rank) * 8 + file; // Flip again to align with C++
+
+      if (selected === null) {
+        selected = index;
+        e.target.style.outline = '2px solid red';
+      } else {
+        const success = Module.ccall(
+          'makeMove',
+          'boolean',
+          ['number', 'number'],
+          [selected, index]
+        );
+
+        console.log(`Trying move from ${selected} to ${index}: ${success}`);
+
+        if (success) {
+          renderPieces();
+        }
+
+        document.querySelectorAll('.square').forEach(sq => sq.style.outline = '');
+        selected = null;
+      }
+    });
+  }
+
+  function initGame() {
+    renderBoard();
+    Module.ccall('initBoard');
+    renderPieces();
+    setupClickHandlers();
+  }
+
+  window.onload = () => {
+    if (Module.calledRun) {
+      // Module already initialized (e.g. on refresh)
+      initGame();
+    } else {
+      // Wait for Module to initialize
+      Module.onRuntimeInitialized = initGame;
+    }
+  };
+
+</script>
+
 </body>
 </html>
 

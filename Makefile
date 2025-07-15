@@ -3,8 +3,8 @@ SRC = src/main.cpp
 OUT_DIR = docs
 OUT_JS = $(OUT_DIR)/index.js
 
-EXPORTED_FUNCS = "['_initBoard', '_getBoard']"
-EXPORTED_RUNTIME = "['ccall', 'cwrap']"
+EXPORTED_FUNCS = "['_initBoard', '_getBoard', '_makeMove']"
+EXPORTED_RUNTIME = "['ccall', 'cwrap', 'HEAPU8']"
 
 $(OUT_JS): $(SRC)
 	@echo "🔧 Compiling $(SRC) → $(OUT_JS)..."

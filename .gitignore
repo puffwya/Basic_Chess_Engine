@@ -1,5 +1,7 @@
+# Ignore build output
 docs/index.js
 docs/index.wasm
+docs/index.js.map
 
 /dist/
 /build/
@@ -7,6 +9,9 @@ docs/index.wasm
 *.js.map
 *.html.map
 *.o
+*.tmp
+*.obj
+*.log
 *.exe
 .DS_Store
 *.swp
