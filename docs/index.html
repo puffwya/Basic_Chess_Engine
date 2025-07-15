@@ -1,15 +1,23 @@
-<!doctype html>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Chess Engine</title>
-</head>
+<head><meta charset="UTF-8"><title>Chess Engine</title></head>
 <body>
-  <h1>My C++ Chess Engine</h1>
-  <button onclick="Module.ccall('initBoard')">Initialize Board</button>
-  <button onclick="Module.ccall('printBoard')">Print Board (to console)</button>
+  <button id="initBtn">Initialize Board</button>
+  <button id="printBtn">Print Board</button>
 
   <script src="index.js"></script>
+  <script>
+    // Wait for Emscripten runtime to initialize before using Module
+    Module.onRuntimeInitialized = () => {
+      // Now Module is ready; attach button event handlers
+      document.getElementById('initBtn').onclick = () => {
+        Module.ccall('initBoard');
+      };
+      document.getElementById('printBtn').onclick = () => {
+        Module.ccall('printBoard');
+      };
+    };
+  </script>
 </body>
 </html>
+
