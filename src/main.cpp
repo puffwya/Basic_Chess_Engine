@@ -1,87 +1,58 @@
-#include <iostream>
-
-enum Piece {
-    EMPTY, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING
-};
-
-enum Color {
-    NONE, WHITE, BLACK
-};
-
-struct Square {
-    Piece piece;
-    Color color;
-};
-
-Square board[8][8];
-
-// Unicode symbols for pieces (White: uppercase, Black: lowercase)
-char getSymbol(Square sq) {
-    if (sq.piece == EMPTY) return '.';
-
-    switch (sq.piece) {
-        case PAWN:   return sq.color == WHITE ? 'P' : 'p';
-        case KNIGHT: return sq.color == WHITE ? 'N' : 'n';
-        case BISHOP: return sq.color == WHITE ? 'B' : 'b';
-        case ROOK:   return sq.color == WHITE ? 'R' : 'r';
-        case QUEEN:  return sq.color == WHITE ? 'Q' : 'q';
-        case KING:   return sq.color == WHITE ? 'K' : 'k';
-        default:     return '?';
-    }
-}
+#include <emscripten.h>
 
 extern "C" {
 
-    void initBoard() {
-        // Empty squares
-        for (int r = 2; r < 6; ++r) {
-            for (int c = 0; c < 8; ++c) {
-                board[r][c] = { EMPTY, NONE };
-            }
-        }
+// Use plain enums for WASM compatibility
+enum Piece {
+    EMPTY = 0,
+    PAWN = 1,
+    KNIGHT = 2,
+    BISHOP = 3,
+    ROOK = 4,
+    QUEEN = 5,
+    KING = 6
+};
 
-        // Pawns
-        for (int c = 0; c < 8; ++c) {
-            board[1][c] = { PAWN, WHITE };
-            board[6][c] = { PAWN, BLACK };
-        }
+enum Color {
+    NONE = 0,
+    WHITE = 1,
+    BLACK = 2
+};
 
-        // Rooks
-        board[0][0] = board[0][7] = { ROOK, WHITE };
-        board[7][0] = board[7][7] = { ROOK, BLACK };
+// Each square stores piece + color
+typedef struct {
+    int piece;
+    int color;
+} Square;
 
-        // Knights
-        board[0][1] = board[0][6] = { KNIGHT, WHITE };
-        board[7][1] = board[7][6] = { KNIGHT, BLACK };
+// 8x8 board (global for now)
+Square board[8][8];
 
-        // Bishops
-        board[0][2] = board[0][5] = { BISHOP, WHITE };
-        board[7][2] = board[7][5] = { BISHOP, BLACK };
+// Set up standard chess position
+void initBoard() {
+    // Clear board
+    for (int row = 0; row < 8; ++row)
+        for (int col = 0; col < 8; ++col)
+            board[row][col] = { EMPTY, NONE };
 
-        // Queens
-        board[0][3] = { QUEEN, WHITE };
-        board[7][3] = { QUEEN, BLACK };
-
-        // Kings
-        board[0][4] = { KING, WHITE };
-        board[7][4] = { KING, BLACK };
+    // Place pawns
+    for (int col = 0; col < 8; ++col) {
+        board[1][col] = { PAWN, WHITE };
+        board[6][col] = { PAWN, BLACK };
     }
 
-    void printBoard() {
-        for (int r = 7; r >= 0; --r) {
-            std::cout << r + 1 << " ";
-            for (int c = 0; c < 8; ++c) {
-                std::cout << getSymbol(board[r][c]) << " ";
-            }
-            std::cout << "\n";
-        }
-        std::cout << "  a b c d e f g h\n";
+    // Place major pieces (white bottom, black top)
+    Piece layout[8] = { ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK };
+
+    for (int col = 0; col < 8; ++col) {
+        board[0][col] = { layout[col], WHITE };
+        board[7][col] = { layout[col], BLACK };
     }
 }
 
-int main() {
-    initBoard();
-    printBoard();
-    return 0;
+// Expose board as a flat pointer for JS to read
+const Square* getBoard() {
+    return &board[0][0];
 }
 
+}
