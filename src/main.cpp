@@ -18,7 +18,6 @@ extern "C" {
     bool hasBlackKingsideRookMoved = false;
     bool hasBlackQueensideRookMoved = false;
     int pendingPromotionSquare = -1; // -1 if no promotion is pending
-
     
     // Utility to get rank (0-7) and file (0-7) from square index (0-63)
     inline int getRank(int square) { return square / 8; }
@@ -31,6 +30,10 @@ extern "C" {
     
     // Forward declaration for helper that checks if a piece at 'from' attacks 'to' on board (without king safety)
     bool canAttack(int from, int to, const uint8_t b[64]);
+
+    bool isValidMove(int from, int to);
+    bool wouldKingBeInCheckAfterMove(int from, int to);
+
     
     // Helper: find king position for color on board
     int findKing(bool white, const uint8_t b[64]) {
@@ -56,6 +59,36 @@ extern "C" {
     // Convenience: check on current board
     bool isSquareAttacked(int sq, bool byWhite) {
         return isSquareAttackedOnBoard(sq, byWhite, board);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    bool isInCheck(bool white) {
+        int kingSquare = findKing(white, board);
+        return isSquareAttacked(kingSquare, !white);
+    }
+
+    bool hasLegalMoves(bool white) {
+        for (int from = 0; from < 64; from++) {
+            uint8_t piece = board[from];
+            if (piece == 0 || (piece % 2 == 1) != white) continue;
+
+            for (int to = 0; to < 64; to++) {
+                if (isValidMove(from, to) && !wouldKingBeInCheckAfterMove(from, to)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    bool isCheckmate(bool white) {
+        return isInCheck(white) && !hasLegalMoves(white);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    int getKingSquare(bool white) {
+        return findKing(white, board);
     }
     
     // Checks raw move attacks ignoring king safety (used for attack detection)

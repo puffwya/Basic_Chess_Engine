@@ -1574,11 +1574,15 @@ function checkIncomingModuleAPI() {
 }
 
 // Imports from the Wasm binary.
+var _isInCheck = Module['_isInCheck'] = makeInvalidEarlyAccess('_isInCheck');
+var _isCheckmate = Module['_isCheckmate'] = makeInvalidEarlyAccess('_isCheckmate');
+var _getKingSquare = Module['_getKingSquare'] = makeInvalidEarlyAccess('_getKingSquare');
 var _makeMove = Module['_makeMove'] = makeInvalidEarlyAccess('_makeMove');
 var _getPendingPromotionSquare = Module['_getPendingPromotionSquare'] = makeInvalidEarlyAccess('_getPendingPromotionSquare');
 var _promotePawn = Module['_promotePawn'] = makeInvalidEarlyAccess('_promotePawn');
 var _initBoard = Module['_initBoard'] = makeInvalidEarlyAccess('_initBoard');
 var _getBoard = Module['_getBoard'] = makeInvalidEarlyAccess('_getBoard');
+var _currentTurn = Module['_currentTurn'] = makeInvalidEarlyAccess('_currentTurn');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _emscripten_stack_init = makeInvalidEarlyAccess('_emscripten_stack_init');
 var _emscripten_stack_get_free = makeInvalidEarlyAccess('_emscripten_stack_get_free');
@@ -1589,11 +1593,15 @@ var __emscripten_stack_alloc = makeInvalidEarlyAccess('__emscripten_stack_alloc'
 var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_get_current');
 
 function assignWasmExports(wasmExports) {
+  Module['_isInCheck'] = _isInCheck = createExportWrapper('isInCheck', 1);
+  Module['_isCheckmate'] = _isCheckmate = createExportWrapper('isCheckmate', 1);
+  Module['_getKingSquare'] = _getKingSquare = createExportWrapper('getKingSquare', 1);
   Module['_makeMove'] = _makeMove = createExportWrapper('makeMove', 2);
   Module['_getPendingPromotionSquare'] = _getPendingPromotionSquare = createExportWrapper('getPendingPromotionSquare', 0);
   Module['_promotePawn'] = _promotePawn = createExportWrapper('promotePawn', 2);
   Module['_initBoard'] = _initBoard = createExportWrapper('initBoard', 0);
   Module['_getBoard'] = _getBoard = createExportWrapper('getBoard', 0);
+  Module['_currentTurn'] = _currentTurn = createExportWrapper('currentTurn', 0);
   _fflush = createExportWrapper('fflush', 1);
   _emscripten_stack_init = wasmExports['emscripten_stack_init'];
   _emscripten_stack_get_free = wasmExports['emscripten_stack_get_free'];
