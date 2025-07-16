@@ -185,14 +185,23 @@
   function checkGameOver() {
     const whiteToMove = Module.ccall('currentTurn', 'number') === 1;
     const isMate = Module.ccall('isCheckmate', 'boolean', ['boolean'], [whiteToMove]);
-  
+    const isStalemate = Module.ccall('isStalemate', 'boolean', [], []);
+    const isDraw = Module.ccall('isInsufficientMaterial', 'boolean') || isStalemate;
+
     if (isMate) {
       const winner = whiteToMove ? 'Black' : 'White';
       document.getElementById('game-over-text').innerText = `${winner} wins by checkmate!`;
       document.getElementById('game-over').classList.remove('hidden');
+    } else if (isStalemate) {
+      document.getElementById('game-over-text').innerText = `Game drawn by stalemate.`;
+      document.getElementById('game-over').classList.remove('hidden');
+    } else if (isDraw) {
+      document.getElementById('game-over-text').innerText = `Game drawn by insufficient material.`;
+      document.getElementById('game-over').classList.remove('hidden');
+    } else {
+      document.getElementById('game-over').classList.add('hidden');
     }
   }
-
 
   function showPromotionPopup() {
     const popup = document.getElementById('promotion-popup');
