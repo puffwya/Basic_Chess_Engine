@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <cmath>
 #include <algorithm>
+#include <set>
+#include "engine.h"
+#include "main.h"
 
 extern "C" {
     
@@ -33,6 +36,7 @@ extern "C" {
 
     bool isValidMove(int from, int to);
     bool wouldKingBeInCheckAfterMove(int from, int to);
+    bool hasLegalMoves(bool white);
 
     
     // Helper: find king position for color on board
@@ -67,20 +71,6 @@ extern "C" {
         return isSquareAttacked(kingSquare, !white);
     }
 
-    bool hasLegalMoves(bool white) {
-        for (int from = 0; from < 64; from++) {
-            uint8_t piece = board[from];
-            if (piece == 0 || (piece % 2 == 1) != white) continue;
-
-            for (int to = 0; to < 64; to++) {
-                if (isValidMove(from, to) && !wouldKingBeInCheckAfterMove(from, to)) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
     EMSCRIPTEN_KEEPALIVE
     bool isCheckmate(bool white) {
         return isInCheck(white) && !hasLegalMoves(white);
@@ -89,6 +79,84 @@ extern "C" {
     EMSCRIPTEN_KEEPALIVE
     int getKingSquare(bool white) {
         return findKing(white, board);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    int getBestAIMove(bool white) {
+        return findBestMove(white);  // Returns from * 64 + to
+    }
+
+    // Helper to check if any legal moves exist for the side to move
+    bool hasLegalMoves(bool white) {
+        for (int from = 0; from < 64; ++from) {
+            if (board[from] == 0 || (board[from] % 2 == 1) != white) continue;
+
+            for (int to = 0; to < 64; ++to) {
+                if (!isValidMove(from, to)) continue;
+                if (!wouldKingBeInCheckAfterMove(from, to)) return true;
+            }
+        }
+        return false;
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    bool isStalemate() {
+        bool white = whiteToMove;
+        return !isInCheck(white) && !hasLegalMoves(white);
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    bool isInsufficientMaterial() {
+        std::vector<int> pieces;
+        for (int i = 0; i < 64; ++i) {
+            if (board[i] != 0) pieces.push_back(board[i]);
+        }
+     
+        // Only kings   
+        if (pieces.size() == 2) return true;
+    
+        // King + Bishop or Knight vs King
+        if (pieces.size() == 3) {
+            for (int p : pieces) {
+                if (p != 11 && p != 12 && p != 3 && p != 4 && p != 5 && p != 6)
+                    return false;
+            }
+            return true;
+        }
+            
+        // King + Bishop vs King + Bishop with same color bishops
+        if (pieces.size() == 4) {
+            int whiteBishop = -1, blackBishop = -1;
+            for (int i = 0; i < 64; ++i) {
+                int p = board[i];
+                if (p == 5) whiteBishop = i;
+                if (p == 6) blackBishop = i;
+            }
+            if (whiteBishop != -1 && blackBishop != -1) {
+                bool whiteColor = (getFile(whiteBishop) + getRank(whiteBishop)) % 2 == 0;
+                bool blackColor = (getFile(blackBishop) + getRank(blackBishop)) % 2 == 0;
+                return whiteColor == blackColor;
+            }
+        }
+
+        // King + Knight vs King + Knight
+        if (pieces.size() == 4) {
+            bool whiteKing = false, blackKing = false;
+            int whiteKnights = 0, blackKnights = 0;
+
+            for (int p : pieces) {
+                if (p == 11) whiteKing = true;
+                else if (p == 12) blackKing = true;
+                else if (p == 3) whiteKnights++;
+                else if (p == 4) blackKnights++;
+            }
+
+            if (whiteKing && blackKing && whiteKnights == 1 && blackKnights == 1) {
+                return true;
+            }
+        }
+    
+        return false;
     }
     
     // Checks raw move attacks ignoring king safety (used for attack detection)
@@ -429,13 +497,18 @@ extern "C" {
 
         // Check for promotion
         if ((piece == 1 && to / 8 == 7) || (piece == 2 && to / 8 == 0)) {
-            pendingPromotionSquare = to;
-            return true;  // Still allow move, but JS will now know to ask for promotion
+            if ((piece % 2 == 0)) {
+                // Black pawn (AI) promotes automatically
+                board[to] = 10; // Black queen
+                pendingPromotionSquare = -1;
+            } else {
+                // White pawn (human) needs to choose
+                pendingPromotionSquare = to;
         }
-
-        whiteToMove = !whiteToMove;
+        board[from] = 0;
         return true;
     }
+
 
     EMSCRIPTEN_KEEPALIVE
     int getPendingPromotionSquare() {

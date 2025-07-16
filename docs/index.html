@@ -229,6 +229,19 @@
         renderPieces();
         updateCheckHighlight();
         checkGameOver();
+
+        // Now trigger AI move if it's black's turn
+        const whiteToMove = Module.ccall('currentTurn', 'number') === 1;
+        if (!whiteToMove) {
+          setTimeout(() => {
+            const aiSuccess = Module.ccall('makeAIMove', 'boolean');
+            if (aiSuccess) {
+              renderPieces();
+              updateCheckHighlight();
+              checkGameOver();
+            }
+          }, 500); // slight delay for realistic effect
+        }
       });
 
       options.appendChild(img);
@@ -264,6 +277,19 @@
             renderPieces();
             updateCheckHighlight();
             checkGameOver();
+
+            // Now trigger AI move if it's black's turn
+            const whiteToMove = Module.ccall('currentTurn', 'number') === 1;
+            if (!whiteToMove) {
+              setTimeout(() => {
+                const aiSuccess = Module.ccall('makeAIMove', 'boolean');
+                if (aiSuccess) {
+                  renderPieces();
+                  updateCheckHighlight();
+                  checkGameOver();
+                }
+              }, 500); // slight delay for realistic effect
+            }
           }
         }
 
