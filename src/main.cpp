@@ -8,6 +8,20 @@
 #include "engine.h"
 #include "main.h"
 
+extern "C" {
+    EMSCRIPTEN_KEEPALIVE void initBoard();
+    EMSCRIPTEN_KEEPALIVE uint8_t* getBoard();
+    EMSCRIPTEN_KEEPALIVE bool makeMove(int from, int to);
+    EMSCRIPTEN_KEEPALIVE int getPendingPromotionSquare();
+    EMSCRIPTEN_KEEPALIVE void promotePawn(int square, int newPieceCode);
+    EMSCRIPTEN_KEEPALIVE int currentTurn();
+    EMSCRIPTEN_KEEPALIVE bool isInCheck(bool white);
+    EMSCRIPTEN_KEEPALIVE bool isCheckmate(bool white);
+    EMSCRIPTEN_KEEPALIVE bool isStalemate();
+    EMSCRIPTEN_KEEPALIVE bool isInsufficientMaterial();
+}
+
+
 // ------------Internal helper functions/vars-----------------//
 //------------------------------------------------------------//
 
@@ -352,7 +366,85 @@ bool wouldKingBeInCheckAfterMove(int from, int to) {
     return isSquareAttackedOnBoard(kingPos, !white, tempBoard);
 }
 
-bool makeMove(int from, int to) {
+//--------------------Global functions/vars--------------------//
+//-------------------------------------------------------------//
+    
+extern "C" EMSCRIPTEN_KEEPALIVE bool isInCheck(bool white) {
+    int kingSquare = findKing(white, board);
+    return isSquareAttacked(kingSquare, !white);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool isCheckmate(bool white) {
+    return isInCheck(white) && !hasLegalMoves(white);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int getKingSquare(bool white) {
+    return findKing(white, board);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE int getBestAIMove(bool white) {
+    return findBestMove(white);  // Returns from * 64 + to
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool isStalemate() {
+    bool white = whiteToMove;
+    return !isInCheck(white) && !hasLegalMoves(white);
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool isInsufficientMaterial() {
+    std::vector<int> pieces;
+    for (int i = 0; i < 64; ++i) {
+        if (board[i] != 0) pieces.push_back(board[i]);
+    }
+     
+    // Only kings   
+    if (pieces.size() == 2) return true;
+    
+    // King + Bishop or Knight vs King
+    if (pieces.size() == 3) {
+        for (int p : pieces) {
+            if (p != 11 && p != 12 && p != 3 && p != 4 && p != 5 && p != 6)
+                return false;
+        }
+        return true;
+    }
+            
+    // King + Bishop vs King + Bishop with same color bishops
+    if (pieces.size() == 4) {
+        int whiteBishop = -1, blackBishop = -1;
+        for (int i = 0; i < 64; ++i) {
+            int p = board[i];
+            if (p == 5) whiteBishop = i;
+            if (p == 6) blackBishop = i;
+        }
+        if (whiteBishop != -1 && blackBishop != -1) {
+            bool whiteColor = (getFile(whiteBishop) + getRank(whiteBishop)) % 2 == 0;
+            bool blackColor = (getFile(blackBishop) + getRank(blackBishop)) % 2 == 0;
+            return whiteColor == blackColor;
+        }
+    }
+
+    // King + Knight vs King + Knight
+    if (pieces.size() == 4) {
+        bool whiteKing = false, blackKing = false;
+        int whiteKnights = 0, blackKnights = 0;
+
+        for (int p : pieces) {
+            if (p == 11) whiteKing = true;
+            else if (p == 12) blackKing = true;
+            else if (p == 3) whiteKnights++;
+            else if (p == 4) blackKnights++;
+        }
+
+        if (whiteKing && blackKing && whiteKnights == 1 && blackKnights == 1) {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
+extern "C" EMSCRIPTEN_KEEPALIVE bool makeMove(int from, int to) {
     uint8_t piece = board[from];   
     if (piece == 0) return false;
 
@@ -400,7 +492,7 @@ bool makeMove(int from, int to) {
     int fromRank = getRank(from);
     int toRank = getRank(to);
     if (piece == 1 && fromRank == 1 && toRank == 3) {
-            enPassantTarget = from + 8;
+        enPassantTarget = from + 8;
     } else if (piece == 2 && fromRank == 6 && toRank == 4) {
         enPassantTarget = from - 8;
     }
@@ -425,141 +517,51 @@ bool makeMove(int from, int to) {
     }
     board[from] = 0;
     return true;
-}
-
-//--------------------Global functions/vars--------------------//
-//-------------------------------------------------------------//
-
-extern "C" {
-    
-    EMSCRIPTEN_KEEPALIVE
-    bool isInCheck(bool white) {
-        int kingSquare = findKing(white, board);
-        return isSquareAttacked(kingSquare, !white);
-    }
-
-    EMSCRIPTEN_KEEPALIVE
-    bool isCheckmate(bool white) {
-        return isInCheck(white) && !hasLegalMoves(white);
-    }
-
-    EMSCRIPTEN_KEEPALIVE
-    int getKingSquare(bool white) {
-        return findKing(white, board);
-    }
-
-    EMSCRIPTEN_KEEPALIVE
-    int getBestAIMove(bool white) {
-        return findBestMove(white);  // Returns from * 64 + to
-    }
-
-    EMSCRIPTEN_KEEPALIVE
-    bool isStalemate() {
-        bool white = whiteToMove;
-        return !isInCheck(white) && !hasLegalMoves(white);
-    }
-
-    EMSCRIPTEN_KEEPALIVE
-    bool isInsufficientMaterial() {
-        std::vector<int> pieces;
-        for (int i = 0; i < 64; ++i) {
-            if (board[i] != 0) pieces.push_back(board[i]);
-        }
-     
-        // Only kings   
-        if (pieces.size() == 2) return true;
-    
-        // King + Bishop or Knight vs King
-        if (pieces.size() == 3) {
-            for (int p : pieces) {
-                if (p != 11 && p != 12 && p != 3 && p != 4 && p != 5 && p != 6)
-                    return false;
-            }
-            return true;
-        }
-            
-        // King + Bishop vs King + Bishop with same color bishops
-        if (pieces.size() == 4) {
-            int whiteBishop = -1, blackBishop = -1;
-            for (int i = 0; i < 64; ++i) {
-                int p = board[i];
-                if (p == 5) whiteBishop = i;
-                if (p == 6) blackBishop = i;
-            }
-            if (whiteBishop != -1 && blackBishop != -1) {
-                bool whiteColor = (getFile(whiteBishop) + getRank(whiteBishop)) % 2 == 0;
-                bool blackColor = (getFile(blackBishop) + getRank(blackBishop)) % 2 == 0;
-                return whiteColor == blackColor;
-            }
-        }
-
-        // King + Knight vs King + Knight
-        if (pieces.size() == 4) {
-            bool whiteKing = false, blackKing = false;
-            int whiteKnights = 0, blackKnights = 0;
-
-            for (int p : pieces) {
-                if (p == 11) whiteKing = true;
-                else if (p == 12) blackKing = true;
-                else if (p == 3) whiteKnights++;
-                else if (p == 4) blackKnights++;
-            }
-
-            if (whiteKing && blackKing && whiteKnights == 1 && blackKnights == 1) {
-                return true;
-            }
-        }
-    
-        return false;
     }
                         
-    EMSCRIPTEN_KEEPALIVE
-    int getPendingPromotionSquare() {
-        return pendingPromotionSquare;
-    }
+extern "C" EMSCRIPTEN_KEEPALIVE int getPendingPromotionSquare() {
+    return pendingPromotionSquare;
+}
 
-    EMSCRIPTEN_KEEPALIVE
-    void promotePawn(int square, int newPieceCode) {
-        if (square == pendingPromotionSquare &&
-            (newPieceCode == 9 || newPieceCode == 10 ||  // Queen
-             newPieceCode == 7 || newPieceCode == 8 ||   // Rook
-             newPieceCode == 5 || newPieceCode == 6 ||   // Bishop
-             newPieceCode == 3 || newPieceCode == 4)) {  // Knight
+extern "C" EMSCRIPTEN_KEEPALIVE void promotePawn(int square, int newPieceCode) {
+    if (square == pendingPromotionSquare &&
+        (newPieceCode == 9 || newPieceCode == 10 ||  // Queen
+         newPieceCode == 7 || newPieceCode == 8 ||   // Rook
+         newPieceCode == 5 || newPieceCode == 6 ||   // Bishop
+         newPieceCode == 3 || newPieceCode == 4)) {  // Knight
 
-            board[square] = newPieceCode;
-            pendingPromotionSquare = -1;
-            whiteToMove = !whiteToMove;  // Now switch turn after promotion is handled
-        }
+        board[square] = newPieceCode;
+        pendingPromotionSquare = -1;
+        whiteToMove = !whiteToMove;  // Now switch turn after promotion is handled
     }
+}
     
-    // Initialize board to standard chess starting position
-    void initBoard() {
-        uint8_t initialBoard[64] = {
-            7,3,5,9,11,5,3,7,
-            1,1,1,1,1,1,1,1,
-            0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,
-            0,0,0,0,0,0,0,0,
-            2,2,2,2,2,2,2,2,
-            8,4,6,10,12,6,4,8
-        };
-        memcpy(board, initialBoard, 64);
-        for(int i=0; i<64; i++) {
-            board[i] = initialBoard[i];
-        }
-        whiteToMove = true;
-        enPassantTarget = -1;
+// Initialize board to standard chess starting position
+extern "C" EMSCRIPTEN_KEEPALIVE void initBoard() {
+    uint8_t initialBoard[64] = {
+        7,3,5,9,11,5,3,7,
+        1,1,1,1,1,1,1,1,
+        0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,
+        0,0,0,0,0,0,0,0,
+        2,2,2,2,2,2,2,2,
+        8,4,6,10,12,6,4,8
+    };
+    memcpy(board, initialBoard, 64);
+    for(int i=0; i<64; i++) {
+        board[i] = initialBoard[i];
     }
+    whiteToMove = true;
+    enPassantTarget = -1;
+}
     
-    // Get board pointer (for JS rendering)
-    uint8_t* getBoard() {
-        return board;
-    }
+// Get board pointer (for JS rendering)
+extern "C" EMSCRIPTEN_KEEPALIVE uint8_t* getBoard() {
+    return board;
+}
     
-    // Return current turn: 1 = White, 2 = Black
-    int currentTurn() {
-        return whiteToMove ? 1 : 2;
-    }
-
-} // extern "C"
+// Return current turn: 1 = White, 2 = Black
+extern "C" EMSCRIPTEN_KEEPALIVE int currentTurn() {
+    return whiteToMove ? 1 : 2;
+}
