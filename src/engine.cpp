@@ -3,6 +3,8 @@
 #include <vector>
 #include <cstdlib>
 
+extern int pendingPromotionSquare; 
+
 // Simple piece values
 const int pieceValues[13] = {
     0,   // Empty

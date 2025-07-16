@@ -514,10 +514,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE bool makeMove(int from, int to) {
         } else {
             // White pawn (human) needs to choose
             pendingPromotionSquare = to;
+        }
     }
-    board[from] = 0;
+
     return true;
-    }
+}
                         
 extern "C" EMSCRIPTEN_KEEPALIVE int getPendingPromotionSquare() {
     return pendingPromotionSquare;
@@ -549,9 +550,6 @@ extern "C" EMSCRIPTEN_KEEPALIVE void initBoard() {
         8,4,6,10,12,6,4,8
     };
     memcpy(board, initialBoard, 64);
-    for(int i=0; i<64; i++) {
-        board[i] = initialBoard[i];
-    }
     whiteToMove = true;
     enPassantTarget = -1;
 }
