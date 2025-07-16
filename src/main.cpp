@@ -17,6 +17,7 @@ extern "C" {
     bool hasWhiteQueensideRookMoved = false;
     bool hasBlackKingsideRookMoved = false;
     bool hasBlackQueensideRookMoved = false;
+    int pendingPromotionSquare = -1; // -1 if no promotion is pending
 
     
     // Utility to get rank (0-7) and file (0-7) from square index (0-63)
@@ -393,10 +394,34 @@ extern "C" {
         if (from == 56) hasBlackQueensideRookMoved = true;
         if (from == 63) hasBlackKingsideRookMoved = true;
 
+        // Check for promotion
+        if ((piece == 1 && to / 8 == 7) || (piece == 2 && to / 8 == 0)) {
+            pendingPromotionSquare = to;
+            return true;  // Still allow move, but JS will now know to ask for promotion
+        }
+
         whiteToMove = !whiteToMove;
         return true;
     }
 
+    EMSCRIPTEN_KEEPALIVE
+    int getPendingPromotionSquare() {
+        return pendingPromotionSquare;
+    }
+
+    EMSCRIPTEN_KEEPALIVE
+    void promotePawn(int square, int newPieceCode) {
+        if (square == pendingPromotionSquare &&
+            (newPieceCode == 9 || newPieceCode == 10 ||  // Queen
+             newPieceCode == 7 || newPieceCode == 8 ||   // Rook
+             newPieceCode == 5 || newPieceCode == 6 ||   // Bishop
+             newPieceCode == 3 || newPieceCode == 4)) {  // Knight
+
+            board[square] = newPieceCode;
+            pendingPromotionSquare = -1;
+            whiteToMove = !whiteToMove;  // Now switch turn after promotion is handled
+        }
+    }
     
     // Initialize board to standard chess starting position
     void initBoard() {

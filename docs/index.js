@@ -1575,6 +1575,8 @@ function checkIncomingModuleAPI() {
 
 // Imports from the Wasm binary.
 var _makeMove = Module['_makeMove'] = makeInvalidEarlyAccess('_makeMove');
+var _getPendingPromotionSquare = Module['_getPendingPromotionSquare'] = makeInvalidEarlyAccess('_getPendingPromotionSquare');
+var _promotePawn = Module['_promotePawn'] = makeInvalidEarlyAccess('_promotePawn');
 var _initBoard = Module['_initBoard'] = makeInvalidEarlyAccess('_initBoard');
 var _getBoard = Module['_getBoard'] = makeInvalidEarlyAccess('_getBoard');
 var _fflush = makeInvalidEarlyAccess('_fflush');
@@ -1588,6 +1590,8 @@ var _emscripten_stack_get_current = makeInvalidEarlyAccess('_emscripten_stack_ge
 
 function assignWasmExports(wasmExports) {
   Module['_makeMove'] = _makeMove = createExportWrapper('makeMove', 2);
+  Module['_getPendingPromotionSquare'] = _getPendingPromotionSquare = createExportWrapper('getPendingPromotionSquare', 0);
+  Module['_promotePawn'] = _promotePawn = createExportWrapper('promotePawn', 2);
   Module['_initBoard'] = _initBoard = createExportWrapper('initBoard', 0);
   Module['_getBoard'] = _getBoard = createExportWrapper('getBoard', 0);
   _fflush = createExportWrapper('fflush', 1);
