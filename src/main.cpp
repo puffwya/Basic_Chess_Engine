@@ -26,8 +26,167 @@ extern "C" {
 // ------------Internal helper functions/vars-----------------//
 //------------------------------------------------------------//
 
-uint8_t board[64];
+using u64 = uint64_t;
+
+uint64_t whitePawns, blackPawns;
+uint64_t whiteKnights, blackKnights;
+uint64_t whiteBishops, blackBishops;
+uint64_t whiteRooks, blackRooks;
+uint64_t whiteQueens, blackQueens;
+uint64_t whiteKing, blackKing;
+
+uint64_t whitePieces, blackPieces, allPieces;
+
+int board[64]; // Optional, but useful for UI/debugging
+
+bool whiteToMove;
+
+struct Bitboards {
+    u64 whitePawns;
+    u64 blackPawns;
+    u64 whiteKnights;
+    u64 blackKnights;
+    u64 whiteBishops;
+    u64 blackBishops;
+    u64 whiteRooks;
+    u64 blackRooks;
+    u64 whiteQueens;
+    u64 blackQueens;
+    u64 whiteKing;
+    u64 blackKing;
+
+    u64 whitePieces() const {
+        return whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
+    }
+
+    u64 blackPieces() const {
+        return blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKing;
+    }
+
+    u64 allPieces() const {
+        return whitePieces() | blackPieces();
+    }
+};
+
+// Helper to convert square index to bitboard bit
+inline u64 bit(int square) {
+    return 1ULL << square;
+}
+
+// To get rank and file (0..7)
+inline int rank(int sq) { return sq >> 3; }
+inline int file(int sq) { return sq & 7; }
+
+enum {
+    EMPTY = 0,
+    WHITE_PAWN = 1, BLACK_PAWN = 2,
+    WHITE_KNIGHT = 3, BLACK_KNIGHT = 4,
+    WHITE_BISHOP = 5, BLACK_BISHOP = 6,
+    WHITE_ROOK = 7,   BLACK_ROOK = 8,
+    WHITE_QUEEN = 9,  BLACK_QUEEN = 10,
+    WHITE_KING = 11,  BLACK_KING = 12
+};
+
+typedef uint64_t Bitboard;
+
+constexpr Bitboard FILE_A = 0x0101010101010101ULL;
+constexpr Bitboard FILE_H = 0x8080808080808080ULL;
+constexpr Bitboard RANK_1 = 0x00000000000000FFULL;
+constexpr Bitboard RANK_8 = 0xFF00000000000000ULL;
+
+// Helper macros
+inline int popLSB(Bitboard &bb) {
+    int sq = __builtin_ctzll(bb);
+    bb &= bb - 1;
+    return sq;
+}
+
+inline Bitboard squareBB(int square) {
+    return 1ULL << square;
+}
+
+inline bool isSquareOccupied(Bitboard board, int square) {
+    return board & (1ULL << square);
+}
+
+int getPieceAt(int square) {
+    return board[square]; // Returns EMPTY or one of your defined enums
+}
+
+void updateAggregateBitboards() {
+    whitePieces = whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKing;
+    blackPieces = blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKing;
+    allPieces = whitePieces | blackPieces;
+}
+
+uint64_t& getBitboard(int pieceCode) {
+    switch (pieceCode) {
+        case 1: return whitePawns;
+        case 2: return blackPawns;
+        case 3: return whiteKnights;
+        case 4: return blackKnights;
+        case 5: return whiteBishops;
+        case 6: return blackBishops;
+        case 7: return whiteRooks;
+        case 8: return blackRooks;
+        case 9: return whiteQueens;
+        case 10: return blackQueens;
+        case 11: return whiteKings;
+        case 12: return blackKings;
+        default:
+            std::cerr << "Invalid piece code: " << pieceCode << "\n";
+            exit(1); // or handle gracefully
+    }
+}
+
+uint64_t& getSideBitboard(int pieceCode) {
+    if (pieceCode % 2 == 1) {
+        return whitePieces;
+    } else {
+        return blackPieces;
+    }
+}
+
+// Bitmask layout: 0b0000WQWK BQBK (White Queen/Kingside, Black Queen/Kingside)
+uint8_t castlingRights = 0b1111;
+
+void disableCastlingRights(int pieceCode, int fromSquare = -1) {
+    switch (pieceCode) {
+        case 7: // White Rook
+            if (fromSquare == 0) castlingRights &= 0b1110; // WQ
+            else if (fromSquare == 7) castlingRights &= 0b1101; // WK
+            break;
+        case 8: // Black Rook
+            if (fromSquare == 56) castlingRights &= 0b1011; // BQ
+            else if (fromSquare == 63) castlingRights &= 0b0111; // BK
+            break;
+        case 11: // White King
+            castlingRights &= 0b1100; // disable both white sides
+            break;
+        case 12: // Black King
+            castlingRights &= 0b0011; // disable both black sides
+            break;
+    }
+}
+
+void updateOccupancy() {
+    whitePieces = whitePawns | whiteKnights | whiteBishops | whiteRooks | whiteQueens | whiteKings;
+    blackPieces = blackPawns | blackKnights | blackBishops | blackRooks | blackQueens | blackKings;
+    allPieces   = whitePieces | blackPieces;
+}
+
+inline void setBit(uint64_t &bb, int square) {
+    bb |= (1ULL << square);
+}
+
+inline void clearBit(uint64_t &bb, int square) {
+    bb &= ~(1ULL << square);
+}
+
             
+// ---------------------------//
+
+
 static bool whiteToMove = true;
 static int enPassantTarget = -1; // -1 = no en passant possible
 bool hasWhiteKingMoved = false;
@@ -445,89 +604,174 @@ extern "C" EMSCRIPTEN_KEEPALIVE bool isInsufficientMaterial() {
     return false;
 }
 
-extern "C" EMSCRIPTEN_KEEPALIVE bool makeMove(int from, int to) {
-    uint8_t piece = board[from];   
-    if (piece == 0) return false;
+extern "C" EMSCRIPTEN_KEEPALIVE
+void makeMove(Move move) {
+    int from = move.from;
+    int to = move.to;
+    uint64_t fromMask = 1ULL << from;
+    uint64_t toMask   = 1ULL << to;
 
-    bool isWhitePiece = (piece % 2) == 1;
-    if (whiteToMove != isWhitePiece) return false;  
+    int movingPiece = getPieceAt(from);
+    int capturedPiece = getPieceAt(to);
 
-    if (!isValidMove(from, to)) return false;
-
-    // Check if move leaves king in check
-    if (wouldKingBeInCheckAfterMove(from, to)) return false;
-
-    // ----- Handle en passant capture -----
-    if ((piece == 1 || piece == 2) && to == enPassantTarget) {
-        int capturedPawnSq = isWhitePiece ? to - 8 : to + 8;
-        board[capturedPawnSq] = 0;
+    // Remove piece from 'from' square and add to 'to' square
+    switch (movingPiece) {
+        case WHITE_PAWN:
+            whitePawns &= ~fromMask;
+            whitePawns |= toMask;
+            break;
+        case WHITE_KNIGHT:
+            whiteKnights &= ~fromMask;
+            whiteKnights |= toMask;
+            break;
+        case WHITE_BISHOP:
+            whiteBishops &= ~fromMask;
+            whiteBishops |= toMask;
+            break;
+        case WHITE_ROOK:
+            whiteRooks &= ~fromMask;
+            whiteRooks |= toMask;
+            break;
+        case WHITE_QUEEN:
+            whiteQueens &= ~fromMask;
+            whiteQueens |= toMask;
+            break;
+        case WHITE_KING:
+            whiteKing &= ~fromMask;
+            whiteKing |= toMask;
+            break;
+        case BLACK_PAWN:
+            blackPawns &= ~fromMask;
+            blackPawns |= toMask;
+            break;
+        case BLACK_KNIGHT:
+            blackKnights &= ~fromMask;
+            blackKnights |= toMask;
+            break;
+        case BLACK_BISHOP:
+            blackBishops &= ~fromMask;
+            blackBishops |= toMask;
+            break;
+        case BLACK_ROOK:
+            blackRooks &= ~fromMask;
+            blackRooks |= toMask;
+            break;
+        case BLACK_QUEEN:
+            blackQueens &= ~fromMask;
+            blackQueens |= toMask;
+            break;
+        case BLACK_KING:
+            blackKing &= ~fromMask;
+            blackKing |= toMask;
+            break;
     }
 
-    // ----- Handle castling rook movement -----
-    if (piece == 11) { // White king
-        if (from == 4 && to == 6) { // Kingside castling
-            board[5] = board[7];
-            board[7] = 0;
-        } else if (from == 4 && to == 2) { // Queenside castling
-            board[3] = board[0];
-            board[0] = 0;
-        }
-    } else if (piece == 12) { // Black king
-        if (from == 60 && to == 62) { // Kingside castling
-            board[61] = board[63];
-            board[63] = 0;
-        } else if (from == 60 && to == 58) { // Queenside castling
-            board[59] = board[56];
-            board[56] = 0;
+    // Remove captured piece
+    if (capturedPiece != EMPTY) {
+        switch (capturedPiece) {
+            case WHITE_PAWN:
+                whitePawns &= ~toMask;
+                break;
+            case WHITE_KNIGHT:
+                whiteKnights &= ~toMask;
+                break;
+            case WHITE_BISHOP:
+                whiteBishops &= ~toMask;
+                break;
+            case WHITE_ROOK:
+                whiteRooks &= ~toMask;
+                break;
+            case WHITE_QUEEN:
+                whiteQueens &= ~toMask;
+                break;
+            case WHITE_KING:
+                whiteKing &= ~toMask;
+                break;
+            case BLACK_PAWN:
+                blackPawns &= ~toMask;
+                break;
+            case BLACK_KNIGHT:
+                blackKnights &= ~toMask;
+                break;
+            case BLACK_BISHOP:
+                blackBishops &= ~toMask;
+                break;
+            case BLACK_ROOK:
+                blackRooks &= ~toMask;
+                break;
+            case BLACK_QUEEN:
+                blackQueens &= ~toMask;
+                break;
+            case BLACK_KING:
+                blackKing &= ~toMask;
+                break;
         }
     }
 
-    // ----- Move the piece -----
-    board[to] = board[from];
-    board[from] = 0;
+// Remove piece from origin
+    clearBit(getBitboard(piece), fromSquare);
+    clearBit(allPieces, fromSquare);
+    clearBit(getSideBitboard(piece), fromSquare);
 
-    // ----- Reset en passant target -----
-    enPassantTarget = -1;
-
-    // ----- Set en passant target for pawn double moves -----
-    int fromRank = getRank(from);
-    int toRank = getRank(to);
-    if (piece == 1 && fromRank == 1 && toRank == 3) {
-        enPassantTarget = from + 8;
-    } else if (piece == 2 && fromRank == 6 && toRank == 4) {
-        enPassantTarget = from - 8;
+    // Handle castling
+    if ((piece == 11 || piece == 12) && abs(toSquare - fromSquare) == 2) {
+        // King is moving two squares — castling
+        if (toSquare == 62) { // White kingside (e1 -> g1)
+            clearBit(whiteRooks, 63);
+            setBit(whiteRooks, 61);
+            clearBit(whitePieces, 63);
+            setBit(whitePieces, 61);
+        } else if (toSquare == 58) { // White queenside (e1 -> c1)
+            clearBit(whiteRooks, 56);
+            setBit(whiteRooks, 59);
+            clearBit(whitePieces, 56);
+            setBit(whitePieces, 59);
+        } else if (toSquare == 6) { // Black kingside (e8 -> g8)
+            clearBit(blackRooks, 7);
+            setBit(blackRooks, 5);
+            clearBit(blackPieces, 7);
+            setBit(blackPieces, 5);
+        } else if (toSquare == 2) { // Black queenside (e8 -> c8)
+            clearBit(blackRooks, 0);
+            setBit(blackRooks, 3);
+            clearBit(blackPieces, 0);
+            setBit(blackPieces, 3);
+        }
+        // Update castling rights
+        disableCastlingRights(piece);
     }
 
-    // ----- Track if kings or rooks move -----
-    if (piece == 11) hasWhiteKingMoved = true;
-    if (piece == 12) hasBlackKingMoved = true;
-    if (from == 0) hasWhiteQueensideRookMoved = true;
-    if (from == 7) hasWhiteKingsideRookMoved = true;
-    if (from == 56) hasBlackQueensideRookMoved = true;
-    if (from == 63) hasBlackKingsideRookMoved = true;
+    // Remove captured piece
+    if (capturedPiece != 0) {
+        clearBit(getBitboard(capturedPiece), toSquare);
+        clearBit(allPieces, toSquare);
+        clearBit(getSideBitboard(capturedPiece), toSquare);
+    }
 
-    // Check for promotion
-    if ((piece == 1 && to / 8 == 7) || (piece == 2 && to / 8 == 0)) {
-        if ((piece % 2 == 0)) {
-            // Black pawn (AI) promotes automatically
-            EM_ASM({
-                console.log("AI reached promotion rank at " + $0);
-            }, to);
-            board[to] = 10; // Black queen
-            pendingPromotionSquare = -1;
-            whiteToMove = !whiteToMove;
-        } else {
-            // White pawn (human) needs to choose
-            pendingPromotionSquare = to;
-        }
+    // Promotion
+    if ((piece == 1 && toSquare >= 56) || (piece == 2 && toSquare <= 7)) {
+        // White pawn reaching 8th rank or black reaching 1st
+        uint64_t& newPieceBoard = getBitboard(promotion);
+        setBit(newPieceBoard, toSquare);
+        setBit(getSideBitboard(promotion), toSquare);
     } else {
-        // No promotion -> flip turn here
-        whiteToMove = !whiteToMove;
+        // Normal move
+        setBit(getBitboard(piece), toSquare);
+        setBit(getSideBitboard(piece), toSquare);
     }
-    EM_ASM({
-        console.log("Pending promotion square: " + $0);
-    }, pendingPromotionSquare);
-    return true;
+
+    // Update all pieces mask
+    updateOccupancy();
+
+    // Update board[64] array for compatibility/debugging if needed
+    board[from] = EMPTY;
+    board[to] = movingPiece;
+
+    // Update whitePieces and blackPieces bitboards
+    updateAggregateBitboards();
+
+    // Flip turn
+    whiteToMove = !whiteToMove;
 }
                         
 extern "C" EMSCRIPTEN_KEEPALIVE int getPendingPromotionSquare() {
@@ -552,21 +796,32 @@ extern "C" EMSCRIPTEN_KEEPALIVE void promotePawn(int square, int newPieceCode) {
 }
     
 // Initialize board to standard chess starting position
-extern "C" EMSCRIPTEN_KEEPALIVE void initBoard() {
-    uint8_t initialBoard[64] = {
-        7,3,5,9,11,5,3,7,
-        1,1,1,1,1,1,1,1,
-        0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,
-        0,0,0,0,0,0,0,0,
-        2,2,2,2,2,2,2,2,
-        8,4,6,10,12,6,4,8
-    };
-    memcpy(board, initialBoard, 64);
-    whiteToMove = true;
-    enPassantTarget = -1;
+extern "C" EMSCRIPTEN_KEEPALIVE void initBitboards(Bitboards &bb) {
+    // Clear all
+    bb = {};
+
+    // Set pieces (example, based on standard starting position squares)
+    // White pawns on rank 2 (squares 8..15)
+    for (int sq = 8; sq <= 15; ++sq) bb.whitePawns |= bit(sq);
+
+    // Black pawns on rank 7 (squares 48..55)
+    for (int sq = 48; sq <= 55; ++sq) bb.blackPawns |= bit(sq);
+
+    // White pieces
+    bb.whiteRooks = bit(0) | bit(7);
+    bb.whiteKnights = bit(1) | bit(6);
+    bb.whiteBishops = bit(2) | bit(5);
+    bb.whiteQueens = bit(3);
+    bb.whiteKing = bit(4);
+
+    // Black pieces
+    bb.blackRooks = bit(56) | bit(63);
+    bb.blackKnights = bit(57) | bit(62);
+    bb.blackBishops = bit(58) | bit(61);
+    bb.blackQueens = bit(59);
+    bb.blackKing = bit(60);
 }
+
     
 // Get board pointer (for JS rendering)
 extern "C" EMSCRIPTEN_KEEPALIVE uint8_t* getBoard() {
