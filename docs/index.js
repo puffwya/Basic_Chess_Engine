@@ -955,6 +955,48 @@ async function createWasm() {
   var __abort_js = () =>
       abort('native code called abort()');
 
+  var readEmAsmArgsArray = [];
+  var readEmAsmArgs = (sigPtr, buf) => {
+      // Nobody should have mutated _readEmAsmArgsArray underneath us to be something else than an array.
+      assert(Array.isArray(readEmAsmArgsArray));
+      // The input buffer is allocated on the stack, so it must be stack-aligned.
+      assert(buf % 16 == 0);
+      readEmAsmArgsArray.length = 0;
+      var ch;
+      // Most arguments are i32s, so shift the buffer pointer so it is a plain
+      // index into HEAP32.
+      while (ch = HEAPU8[sigPtr++]) {
+        var chr = String.fromCharCode(ch);
+        var validChars = ['d', 'f', 'i', 'p'];
+        // In WASM_BIGINT mode we support passing i64 values as bigint.
+        validChars.push('j');
+        assert(validChars.includes(chr), `Invalid character ${ch}("${chr}") in readEmAsmArgs! Use only [${validChars}], and do not specify "v" for void return argument.`);
+        // Floats are always passed as doubles, so all types except for 'i'
+        // are 8 bytes and require alignment.
+        var wide = (ch != 105);
+        wide &= (ch != 112);
+        buf += wide && (buf % 8) ? 4 : 0;
+        readEmAsmArgsArray.push(
+          // Special case for pointers under wasm64 or CAN_ADDRESS_2GB mode.
+          ch == 112 ? HEAPU32[((buf)>>2)] :
+          ch == 106 ? HEAP64[((buf)>>3)] :
+          ch == 105 ?
+            HEAP32[((buf)>>2)] :
+            HEAPF64[((buf)>>3)]
+        );
+        buf += wide ? 8 : 4;
+      }
+      return readEmAsmArgsArray;
+    };
+  var runEmAsmFunction = (code, sigPtr, argbuf) => {
+      var args = readEmAsmArgs(sigPtr, argbuf);
+      assert(ASM_CONSTS.hasOwnProperty(code), `No EM_ASM constant found at address ${code}.  The loaded WebAssembly file is likely out of sync with the generated JavaScript.`);
+      return ASM_CONSTS[code](...args);
+    };
+  var _emscripten_asm_const_int = (code, sigPtr, argbuf) => {
+      return runEmAsmFunction(code, sigPtr, argbuf);
+    };
+
   var abortOnCannotGrowMemory = (requestedSize) => {
       abort(`Cannot enlarge memory arrays to size ${requestedSize} bytes (OOM). Either (1) compile with -sINITIAL_MEMORY=X with X higher than the current value ${HEAP8.length}, (2) compile with -sALLOW_MEMORY_GROWTH which allows increasing the size at runtime, or (3) if you want malloc to return NULL (0) instead of this abort, compile with -sABORTING_MALLOC=0`);
     };
@@ -1329,7 +1371,7 @@ Module['FS_createPreloadedFile'] = FS.createPreloadedFile;
   'inetNtop6',
   'readSockaddr',
   'writeSockaddr',
-  'readEmAsmArgs',
+  'runMainThreadEmAsm',
   'jstoi_q',
   'getExecutableName',
   'autoResumeAudioContext',
@@ -1515,6 +1557,8 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'timers',
   'warnOnce',
   'readEmAsmArgsArray',
+  'readEmAsmArgs',
+  'runEmAsmFunction',
   'wasmTable',
   'noExitRuntime',
   'addOnPreRun',
@@ -1714,6 +1758,11 @@ unexportedSymbols.forEach(unexportedRuntimeSymbol);
 function checkIncomingModuleAPI() {
   ignoredModuleProp('fetchSettings');
 }
+var ASM_CONSTS = {
+  70896: ($0) => { console.log("AI reached promotion rank at " + $0); },  
+ 70951: ($0) => { console.log("Pending promotion square: " + $0); },  
+ 71003: ($0, $1) => { console.log("Promoting at " + $0 + " to " + $1); }
+};
 
 // Imports from the Wasm binary.
 var _isInCheck = Module['_isInCheck'] = makeInvalidEarlyAccess('_isInCheck');
@@ -1728,6 +1777,7 @@ var _promotePawn = Module['_promotePawn'] = makeInvalidEarlyAccess('_promotePawn
 var _initBoard = Module['_initBoard'] = makeInvalidEarlyAccess('_initBoard');
 var _getBoard = Module['_getBoard'] = makeInvalidEarlyAccess('_getBoard');
 var _currentTurn = Module['_currentTurn'] = makeInvalidEarlyAccess('_currentTurn');
+var _setCurrentTurn = Module['_setCurrentTurn'] = makeInvalidEarlyAccess('_setCurrentTurn');
 var _makeAIMove = Module['_makeAIMove'] = makeInvalidEarlyAccess('_makeAIMove');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _strerror = makeInvalidEarlyAccess('_strerror');
@@ -1752,6 +1802,7 @@ function assignWasmExports(wasmExports) {
   Module['_initBoard'] = _initBoard = createExportWrapper('initBoard', 0);
   Module['_getBoard'] = _getBoard = createExportWrapper('getBoard', 0);
   Module['_currentTurn'] = _currentTurn = createExportWrapper('currentTurn', 0);
+  Module['_setCurrentTurn'] = _setCurrentTurn = createExportWrapper('setCurrentTurn', 1);
   Module['_makeAIMove'] = _makeAIMove = createExportWrapper('makeAIMove', 0);
   _fflush = createExportWrapper('fflush', 1);
   _strerror = createExportWrapper('strerror', 1);
@@ -1768,6 +1819,8 @@ var wasmImports = {
   __cxa_throw: ___cxa_throw,
   /** @export */
   _abort_js: __abort_js,
+  /** @export */
+  emscripten_asm_const_int: _emscripten_asm_const_int,
   /** @export */
   emscripten_resize_heap: _emscripten_resize_heap,
   /** @export */

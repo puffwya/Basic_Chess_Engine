@@ -224,6 +224,7 @@
 
       img.addEventListener('click', () => {
         Module.ccall('promotePawn', 'void', ['number', 'number'], [pendingPromotion, code]);
+
         pendingPromotion = null;
         popup.classList.add('hidden');
         renderPieces();
@@ -243,13 +244,11 @@
           }, 500); // slight delay for realistic effect
         }
       });
-
       options.appendChild(img);
     });
 
     popup.classList.remove('hidden');
   }
-
 
   function setupClickHandlers() {
     document.getElementById('board').addEventListener('click', (e) => {

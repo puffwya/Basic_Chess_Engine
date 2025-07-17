@@ -3,7 +3,7 @@ SRC = src/main.cpp src/engine.cpp
 OUT_DIR = docs
 OUT_JS = $(OUT_DIR)/index.js
 
-EXPORTED_FUNCS = "['_initBoard', '_getBoard', '_makeMove', '_getPendingPromotionSquare', '_promotePawn', '_currentTurn', '_isInCheck', '_isCheckmate', '_isStalemate', '_isInsufficientMaterial', '_makeAIMove']"
+EXPORTED_FUNCS = "['_initBoard', '_getBoard', '_makeMove', '_getPendingPromotionSquare', '_promotePawn', '_currentTurn', '_isInCheck', '_isCheckmate', '_isStalemate', '_isInsufficientMaterial', '_makeAIMove', '_setCurrentTurn']"
 EXPORTED_RUNTIME = "['ccall', 'cwrap', 'HEAPU8']"
 
 $(OUT_JS): $(SRC)

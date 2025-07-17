@@ -7,6 +7,7 @@
 #include <set>
 #include "engine.h"
 #include "main.h"
+#include <iostream>
 
 extern "C" {
     EMSCRIPTEN_KEEPALIVE void initBoard();
@@ -509,14 +510,23 @@ extern "C" EMSCRIPTEN_KEEPALIVE bool makeMove(int from, int to) {
     if ((piece == 1 && to / 8 == 7) || (piece == 2 && to / 8 == 0)) {
         if ((piece % 2 == 0)) {
             // Black pawn (AI) promotes automatically
+            EM_ASM({
+                console.log("AI reached promotion rank at " + $0);
+            }, to);
             board[to] = 10; // Black queen
             pendingPromotionSquare = -1;
+            whiteToMove = !whiteToMove;
         } else {
             // White pawn (human) needs to choose
             pendingPromotionSquare = to;
         }
+    } else {
+        // No promotion -> flip turn here
+        whiteToMove = !whiteToMove;
     }
-
+    EM_ASM({
+        console.log("Pending promotion square: " + $0);
+    }, pendingPromotionSquare);
     return true;
 }
                         
@@ -533,7 +543,11 @@ extern "C" EMSCRIPTEN_KEEPALIVE void promotePawn(int square, int newPieceCode) {
 
         board[square] = newPieceCode;
         pendingPromotionSquare = -1;
-        whiteToMove = !whiteToMove;  // Now switch turn after promotion is handled
+        whiteToMove = !whiteToMove;  // Switch turn after promotion is handled
+        EM_ASM({
+          console.log("Promoting at " + $0 + " to " + $1);
+        }, index, newPieceCode);
+
     }
 }
     
@@ -563,3 +577,8 @@ extern "C" EMSCRIPTEN_KEEPALIVE uint8_t* getBoard() {
 extern "C" EMSCRIPTEN_KEEPALIVE int currentTurn() {
     return whiteToMove ? 1 : 2;
 }
+
+extern "C" EMSCRIPTEN_KEEPALIVE void setCurrentTurn(int turn) {
+    whiteToMove = (turn == 1);
+}
+
